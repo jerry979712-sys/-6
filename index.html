@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>會籍精算系統 - 最終校正版</title>
+    <style>
+        :root { --primary: #1a73e8; --secondary: #34a853; --danger: #d93025; --bg: #f0f2f5; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 20px; margin: 0; }
+        .wrapper { display: flex; flex-direction: row; justify-content: center; align-items: flex-start; gap: 20px; max-width: 1100px; margin: 0 auto; }
+        .card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); flex: 1; min-width: 320px; box-sizing: border-box; }
+        h2 { text-align: center; margin: 0 0 15px 0; font-size: 1.2rem; border-bottom: 2px solid; padding-bottom: 10px; }
+        .date-card h2 { color: var(--primary); border-color: var(--primary); }
+        .money-card h2 { color: var(--secondary); border-color: var(--secondary); }
+        
+        /* 輸入控制 */
+        .date-container { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
+        .date-container input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #dadce0; border-radius: 10px; font-size: 16px; outline: none; }
+        .date-container input[type="date"] { position: absolute; right: 10px; width: 30px; opacity: 0; cursor: pointer; }
+        .calendar-icon { position: absolute; right: 12px; pointer-events: none; font-size: 18px; }
+
+        input { width: 100%; padding: 12px; border: 1.5px solid #dadce0; border-radius: 10px; font-size: 16px; box-sizing: border-box; outline: none; margin-bottom: 10px; }
+        .fee-toggle { display: flex; background: #eee; border-radius: 8px; padding: 3px; margin-bottom: 10px; }
+        .fee-btn { flex: 1; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px; background: none; color: #666; }
+        .fee-btn.active { background: white; color: var(--secondary); font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-group { display: flex; gap: 5px; margin-top: -5px; margin-bottom: 10px; }
+        .btn-sm { flex: 1; padding: 5px; font-size: 11px; border: 1px solid #ddd; border-radius: 5px; background: #fff; cursor: pointer; }
+
+        /* 結果與複製區 */
+        .money-res { background: #fdfdfd; border: 1.5px solid #ddd; border-radius: 15px; padding: 15px; margin-top: 15px; }
+        .copy-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .copy-btn { background: var(--secondary); color: white; border: none; padding: 6px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: bold; }
+        .copy-btn:active { opacity: 0.8; }
+        .copy-area { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 10px; font-family: monospace; line-height: 1.6; color: #333; font-size: 14px; white-space: pre-wrap; }
+        
+        .refund-banner { text-align: center; padding: 10px; border-radius: 10px; font-size: 20px; font-weight: 800; margin-bottom: 15px; }
+        
+        @media (max-width: 800px) { .wrapper { flex-direction: column; align-items: center; } .card { width: 100%; } }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div class="card date-card">
+        <h2>📅 1. 到期日試算</h2>
+        <label>起始日 (YYYYMMDD 或帶斜線)</label>
+        <div class="date-container">
+            <input type="text" id="d_start" placeholder="YYYY/MM/DD" onblur="formatOnBlur(this, 'd')" oninput="checkQuickCalc(this, 'd')">
+            <span class="calendar-icon">📅</span>
+            <input type="date" onchange="syncDate(this, 'd_start')">
+        </div>
+        <div class="row">
+            <div>
+                <label>會籍月份</label>
+                <input type="number" id="d_base" oninput="calcDate()">
+                <div class="btn-group">
+                    <button class="btn-sm" onclick="quickBase(12)">12</button>
+                    <button class="btn-sm" onclick="quickBase(24)">24</button>
+                    <button class="btn-sm" onclick="quickBase(36)">36</button>
+                </div>
+            </div>
+            <div><label>贈送月份</label><input type="number" id="d_gift" value="0" oninput="calcDate()"></div>
+        </div>
+        <label>請假月份</label>
+        <input type="number" id="d_leave" value="0" step="0.5" oninput="calcDate()">
+        <div id="date_ui" style="display:none; text-align:center; background:#e8f0fe; padding:15px; border-radius:12px; border:2px solid var(--primary);">
+            <div style="font-weight:bold; color:var(--primary)">正確到期日</div>
+            <div id="res_date" style="font-size:26px; font-weight:900; color:#0d47a1; margin:5px 0;"></div>
+            <div id="res_bonus" style="font-size:12px; color:#e67e22; font-weight:bold;"></div>
+        </div>
+    </div>
+
+    <div class="card money-card">
+        <h2>💰 2. 退費結算</h2>
+        <div class="row">
+            <div><label>顧客姓名</label><input type="text" id="m_name" placeholder="名字" oninput="calcMoney()"></div>
+            <div><label>會員編號</label><input type="text" id="m_cid" placeholder="編號" oninput="calcMoney()"></div>
+        </div>
+        <label>訂單編號</label>
+        <input type="text" id="m_oid" placeholder="訂單編號" oninput="calcMoney()">
+        
+        <label>起始日 (會籍開始當天)</label>
+        <div class="date-container">
+            <input type="text" id="m_start" placeholder="YYYY/MM/DD" onblur="formatOnBlur(this, 'm')" oninput="checkQuickCalc(this, 'm')">
+            <span class="calendar-icon">📅</span>
+            <input type="date" onchange="syncDate(this, 'm_start')">
+        </div>
+        
+        <div class="row">
+            <div><label>合約總額 (不含入會)</label><input type="number" id="m_total" oninput="calcMoney()"></div>
+            <div>
+                <label>入會費 (+1500)</label>
+                <div class="fee-toggle">
+                    <button id="f_no" class="fee-btn active" onclick="setFee(false)">無</button>
+                    <button id="f_yes" class="fee-btn" onclick="setFee(true)">有</button>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div><label>已繳費用</label><input type="number" id="m_paid" oninput="calcMoney()"></div>
+            <div><label>會籍月 (平均分母)</label><input type="number" id="m_base" oninput="calcMoney()"></div>
+        </div>
+
+        <div id="money_ui" class="money-res" style="display:none;">
+            <div id="v_banner" class="refund-banner"></div>
+            <div class="copy-header">
+                <span style="font-size:12px; color:#666; font-weight:bold;">校正格式：</span>
+                <button class="copy-btn" onclick="copyResult()">一鍵複製內容</button>
+            </div>
+            <div class="copy-area" id="copy_text"></div>
+            <div style="text-align:center; font-size:11px; color:#888; margin-top:10px;">下個 0.5 跳轉日：<span id="v_next"></span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let hasFee = false;
+
+    function checkQuickCalc(el, type) {
+        let v = el.value.replace(/\D/g, '');
+        if (v.length === 8) {
+            el.value = v.substring(0, 4) + '/' + v.substring(4, 6) + '/' + v.substring(6, 8);
+            type === 'd' ? calcDate() : calcMoney();
+        }
+    }
+
+    function formatOnBlur(el, type) {
+        let v = el.value.replace(/\D/g, '');
+        if (v.length >= 6 && v.length < 8) {
+            let y = v.substring(0,4), m = v.substring(4,5), d = v.substring(5);
+            if(v.length === 6) { m = '0'+m; d = '0'+d; }
+            el.value = `${y}/${m}/${d}`;
+        }
+        type === 'd' ? calcDate() : calcMoney();
+    }
+
+    function syncDate(p, id) {
+        if (!p.value) return;
+        const pts = p.value.split('-');
+        document.getElementById(id).value = `${pts[0]}/${pts[1]}/${pts[2]}`;
+        id === 'd_start' ? calcDate() : calcMoney();
+    }
+
+    function setFee(s) {
+        hasFee = s;
+        document.getElementById('f_yes').className = s ? 'fee-btn active' : 'fee-btn';
+        document.getElementById('f_no').className = s ? 'fee-btn' : 'fee-btn active';
+        calcMoney();
+    }
+
+    function quickBase(v) { document.getElementById('d_base').value = v; calcDate(); }
+
+    function copyResult() {
+        const text = document.getElementById('copy_text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            alert("已複製到剪貼簿！");
+        });
+    }
+
+    function calcDate() {
+        const str = document.getElementById('d_start').value;
+        const mB = parseFloat(document.getElementById('d_base').value) || 0;
+        const mG = parseFloat(document.getElementById('d_gift').value) || 0;
+        const mL = parseFloat(document.getElementById('d_leave').value) || 0;
+        if (!str.includes('/') || mB === 0) return;
+        const start = new Date(str.replace(/\//g, '-'));
+        if (isNaN(start.getTime())) return;
+        let expiry = new Date(start);
+        expiry.setMonth(start.getMonth() + mB + mG + mL);
+        expiry.setDate(expiry.getDate() - 1);
+        let bonus = [];
+        const c1 = new Date("2021-05-15"), c2s = new Date("2022-04-13"), c2e = new Date("2022-04-15");
+        if (start <= c1 && expiry >= c1) { expiry.setDate(expiry.getDate() + 78); bonus.push("⚠️ 已加 2021休館78天"); }
+        if (start <= c2e && expiry >= c2s) { expiry.setDate(expiry.getDate() + 3); bonus.push("⚠️ 已加 2022休館3天"); }
+        document.getElementById('res_date').innerText = `${expiry.getFullYear()}/${expiry.getMonth()+1}/${expiry.getDate()}`;
+        document.getElementById('res_bonus').innerHTML = bonus.join('<br>');
+        document.getElementById('date_ui').style.display = 'block';
+    }
+
+    function calcMoney() {
+        const str = document.getElementById('m_start').value;
+        const mB = parseFloat(document.getElementById('m_base').value) || 0;
+        const total = parseFloat(document.getElementById('m_total').value) || 0;
+        const paid = parseFloat(document.getElementById('m_paid').value) || 0;
+        const name = document.getElementById('m_name').value || "---";
+        const cid = document.getElementById('m_cid').value || "---";
+        const oid = document.getElementById('m_oid').value || "---";
+        
+        const today = new Date(); today.setHours(0,0,0,0);
+        if (!str.includes('/') || mB === 0) return;
+        const start = new Date(str.replace(/\//g, '-'));
+        if (isNaN(start.getTime()) || today < start) return;
+
+        let passed = 0, check = new Date(start), cycle = 0;
+        while (check <= today) {
+            passed += 0.5; cycle++;
+            if (cycle % 2 === 1) check.setDate(check.getDate() + 15);
+            else { check = new Date(start); check.setMonth(start.getMonth() + (cycle / 2)); }
+        }
+
+        const left = Math.max(0, mB - passed);
+        const joinFee = hasFee ? 1500 : 0;
+        const fullTotal = total + joinFee;
+        
+        // --- 核心四捨五入邏輯 ---
+        const pFee = Math.round(passed * (fullTotal / mB)); // 已經過費用四捨五入
+        const pen = Math.round(left * (fullTotal / mB) * 0.2); // 違約金四捨五入
+        const final = paid - joinFee - pFee - pen;
+
+        const output = 
+`會籍退費校正格式
+${name}
+${cid}
+${oid}
+
+已繳:${paid}
+入會費:${joinFee}
+已經過:${passed}個月(${fullTotal}/${mB}x${passed}=${pFee})
+違約金:${left}個月(${fullTotal}/${mB}x${left}x20%=${pen})
+可退:${paid}-${joinFee}-${pFee}-${pen}=${final}`;
+
+        document.getElementById('copy_text').innerText = output;
+        const b = document.getElementById('v_banner');
+        b.innerText = (final >= 0 ? "可退金額: $" : "需補繳: $") + Math.abs(final).toLocaleString();
+        b.style.background = final >= 0 ? "#e8f5e9" : "#ffebee";
+        b.style.color = final >= 0 ? "#2e7d32" : "#d93025";
+        document.getElementById('v_next').innerText = `${check.getFullYear()}/${check.getMonth()+1}/${check.getDate()}`;
+        document.getElementById('money_ui').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
